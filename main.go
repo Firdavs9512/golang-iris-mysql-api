@@ -17,12 +17,19 @@ var userName string
 var sampleSecretKey = []byte("SecretYouShouldHide")
 
 type User struct {
-	ID       uint   `gorm:"primarykey;autoIncrement"`
-	Username string `gorm:"unique;not null""`
-	Email    string
-	Password string
-	Orders   []Order   `gorm:"foreignKey:Id`
-	Products []Product `gorm:"foreignKey:Id`
+	ID         uint   `gorm:"primarykey;autoIncrement"`
+	Username   string `gorm:"unique;not null""`
+	Email      string
+	Location   string
+	Name       string
+	Surname    string
+	FatherName string
+	BirthOfDay string
+	Gender     string
+	Number     uint
+	Password   string
+	Orders     []Order   `gorm:"foreignKey:Id`
+	Products   []Product `gorm:"foreignKey:Id`
 }
 type Order struct {
 	ID        uint `gorm:"primarykey;autoIncrement"`
@@ -51,11 +58,23 @@ type Claims struct {
 
 func main() {
 	app := iris.New()
-
+	// root -> mysql-username
+	// mysql -> mysql-password
+	// (127.0.0.1:3306) -> host:port
+	// golang-auth -> mysql-database-name
 	dsn := "root:mysql@tcp(127.0.0.1:3306)/golang-auth"
 	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Panic("Mysql connect error!")
+	}
+	if !DB.Migrator().HasTable(&User{}) {
+		DB.AutoMigrate(&User{})
+	}
+	if !DB.Migrator().HasTable(&Product{}) {
+		DB.AutoMigrate(&Product{})
+	}
+	if !DB.Migrator().HasTable(&Order{}) {
+		DB.AutoMigrate(&Order{})
 	}
 	//DB.AutoMigrate(&User{}, &Product{}, &Order{})
 	app.Post("/api/register", register)
@@ -98,43 +117,6 @@ func deleteProduct(ctx iris.Context) {
 	ctx.JSON(iris.Map{
 		"message": "Product success deleted!",
 	})
-}
-
-// middleware for auth users
-func authMiddle(ctx iris.Context) {
-	var tokens struct {
-		Token string `json: "token"`
-	}
-	ctx.ReadJSON(&tokens)
-
-	tokenString := tokens.Token
-	claims := &Claims{}
-	//tokenString := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmb28iOiJiYXIiLCJuYmYiOjE0NDQ0Nzg0MDB9.u1riaD1rW97opCoAuRCTy4w58Br-Zk-bh7vLiRIsrpU"
-	var sampleSecretKey = []byte("SecretYouShouldHide")
-	tkn, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return sampleSecretKey, nil
-	})
-	if err != nil {
-		if err == jwt.ErrSignatureInvalid {
-			ctx.JSON(iris.Map{
-				"message": "No login!",
-			})
-			return
-		}
-		ctx.JSON(iris.Map{
-			"message": "No login!",
-		})
-		return
-	}
-	if !tkn.Valid {
-		ctx.JSON(iris.Map{
-			"message": "token parset error!",
-		})
-		return
-	}
-	userName = claims.Username
-
-	ctx.Next()
 }
 
 // getUsersData handler
@@ -189,11 +171,9 @@ func login(ctx iris.Context) {
 	claims := &Claims{
 		Username: users.Username,
 		RegisteredClaims: jwt.RegisteredClaims{
-			// In JWT, the expiry time is expressed as unix milliseconds
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
-	// Sign and get the complete encoded token as a string using the secret
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(sampleSecretKey)
 	if err != nil {
@@ -227,7 +207,6 @@ func createOrder(ctx iris.Context) {
 		tokenString = ctx.GetCookie("token")
 	}
 	claims := &Claims{}
-	//tokenString := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmb28iOiJiYXIiLCJuYmYiOjE0NDQ0Nzg0MDB9.u1riaD1rW97opCoAuRCTy4w58Br-Zk-bh7vLiRIsrpU"
 	var sampleSecretKey = []byte("SecretYouShouldHide")
 	tkn, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return sampleSecretKey, nil
@@ -289,7 +268,6 @@ func createProduct(ctx iris.Context) {
 		tokenString = headerToken
 	}
 	claims := &Claims{}
-	//tokenString := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmb28iOiJiYXIiLCJuYmYiOjE0NDQ0Nzg0MDB9.u1riaD1rW97opCoAuRCTy4w58Br-Zk-bh7vLiRIsrpU"
 	var sampleSecretKey = []byte("SecretYouShouldHide")
 	tkn, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return sampleSecretKey, nil
@@ -337,29 +315,43 @@ func createProduct(ctx iris.Context) {
 // regsiter handler
 func register(ctx iris.Context) {
 	var data struct {
-		Username string `json: "username"`
-		Password string `json: "password"`
-		Email    string `json: "email"`
+		Username   string `json: "username"`
+		Password   string `json: "password"`
+		Email      string `json: "email"`
+		Surname    string `json: "surname"`
+		Name       string `json: "name"`
+		FatherName string `json: "father_name"`
+		Number     uint   `json: "number"`
+		Gender     string `json: "gender"`
+		Location   string `json: "location"`
+		BirthOfDay string `json: "birth_of_day"`
 	}
 	ctx.ReadJSON(&data)
-	// create user data for db //
-	result := DB.Create(&User{Username: data.Username, Password: data.Password, Email: data.Email})
+	result := DB.Create(&User{
+		Username:   data.Username,
+		Password:   data.Password,
+		Email:      data.Email,
+		Surname:    data.Surname,
+		Location:   data.Location,
+		FatherName: data.FatherName,
+		Number:     data.Number,
+		Name:       data.Name,
+		Gender:     data.Gender,
+		BirthOfDay: data.BirthOfDay,
+	})
 	if result.Error != nil {
 		ctx.JSON(iris.Map{
 			"message": "Failed data for create!",
 		})
 		return
 	}
-	// create token //
 	expirationTime := time.Now().Add(30 * time.Minute)
 	claims := &Claims{
 		Username: data.Username,
 		RegisteredClaims: jwt.RegisteredClaims{
-			// In JWT, the expiry time is expressed as unix milliseconds
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 		},
 	}
-	// Sign and get the complete encoded token as a string using the secret
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(sampleSecretKey)
 	if err != nil {
